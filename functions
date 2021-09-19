@@ -1,0 +1,5 @@
+function epoch2date() { TZ=UTC date -d "@$1" -Iseconds }
+function date2epoch() { TZ=UTC date -d "$1" +%s }
+function base64encode() { echo -n "$1" | base64 }
+function base64decode() { echo "$1" | base64 -d }
+function waitup() { until ping -c1 $1 >/dev/null 2>&1; do :; done }

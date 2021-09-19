@@ -1,0 +1,77 @@
+#!/bin/bash
+# use bash as we use process substitution
+#
+# DESCRIPTION
+#   Decode JWT token on standard input and verify signature
+#
+# SYNOPSIS
+#   jwt-decode [options]
+# 
+# OPTIONS:
+#
+#   Option          Parameter       Usage
+#   --------------  --------------  --------------------------------------------
+#   -h|--help                       Show this help
+#   -v|--verify     url             URL to obtain Public Key from.
+#
+# EXIT STATUS:
+#   Returns success unless an invalid option is given.
+
+usage()
+{
+    sed -ne '/^#/!q;s/.\{1,2\}//;1,3d;p' < "$0"
+}
+
+ENVIRONMENT=
+
+while [[ $# -gt 0 ]]; do
+    key="$1"; shift
+    case $key in
+        -h|--help)      usage
+                        exit ;;
+        -v|--verify)    PUBLIC_KEY_URL=$1
+                        ;;
+  esac
+  shift
+done
+
+pad()
+{
+    awk '{n = length($1) % 4; print $1 (n == 3 ? "=" : (n == 2 ? "==" : "")) }'
+}
+
+b64url_to_b64()
+{
+    echo "$1" | tr -- '-_' '+/' | pad
+}
+
+IFS='.' read -r HEADER_B64URL PAYLOAD_B64URL SIGNATURE_B64URL
+
+HEADER_PAYLOAD=${1%.*}
+HEADER=${HEADER_PAYLOAD%.*}
+PAYLOAD=${HEADER_PAYLOAD#*.}
+SIGNATURE=${1##*.}
+
+HEADER=$(b64url_to_b64 $HEADER_B64URL)
+PAYLOAD=$(b64url_to_b64 $PAYLOAD_B64URL)
+SIGNATURE=$(b64url_to_b64 $SIGNATURE_B64URL)
+
+echo "HEADER"
+echo $HEADER | base64 -di - | jq
+
+echo "PAYLOAD"
+echo $PAYLOAD | base64 -di - | jq
+
+PUBLIC_KEY=$(curl --silent $PUBLIC_KEY_URL | jq -r '.value')
+
+openssl dgst -sha256 \
+    -verify <(echo "$PUBLIC_KEY") \
+    -signature <(echo -n "$SIGNATURE" | base64 -d) \
+    <(echo -n "$HEADER_B64URL.$PAYLOAD_B64URL") \
+    > /dev/null
+
+if [ $? -eq 0 ]; then
+    echo "VALID SIGNATURE"
+else
+    echo "INVALID SIGNATURE"
+fi

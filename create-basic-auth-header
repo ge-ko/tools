@@ -1,0 +1,4 @@
+#! /bin/sh
+
+echo "Authorization: Basic $(echo '$1:$2 | base64 --encode')"
+
